@@ -1,15 +1,16 @@
 from PIL import Image, ImageDraw, ImageFont
 import random
-#import numpy
-from os import listdir, path
+import os
 
-current_path = path.abspath(__file__)[:-len(path.basename(__file__))]
+script_path = os.path.dirname(os.path.realpath(__file__))
+os.chdir(script_path)
+img_path = script_path+"\\letterimgs\\"
 
 def get_fonts(m=1000,rf=[]):
     if m<0:
         m=1000000000
-    fnts = listdir("C:/Windows/Fonts")
-    helper = listdir("C:/Windows/Fonts")
+    fnts = os.listdir("C:/Windows/Fonts")
+    helper = os.listdir("C:/Windows/Fonts")
     i = 0
     for f in helper:
         if f[-3:]!="ttf":
@@ -99,7 +100,7 @@ def make_imgs(fnts, amount=100, fixedletter="", lettermode=0):
         d.text((10,10), t , font=fnt, fill=0)
         img = crop_imgs(img,255,4)
 
-        img.save(current_path+'letterimgs\\'+str(i)+'.bmp')
+        img.save(img_path+str(i)+'.bmp')
 
         labels.append(str(t)+";"+str(i)+"\n")
         stats.append(str(fname)+"\n")
