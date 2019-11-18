@@ -8,12 +8,6 @@ import os
 #import pathlib
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 
-script_path = os.path.dirname(os.path.realpath(__file__))
-os.chdir(script_path)
-img_path = script_path+"\\letterimgs\\"
 
 
-
-la = tf.io.read_file("labels.txt")
-p = tf.strings.split(la,";")
-
+print(np.asarray(["a","b","c"])=="a")

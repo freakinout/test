@@ -5,12 +5,13 @@ import os
 script_path = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_path)
 img_path = script_path+"\\letterimgs\\"
+if not os.path.exists(img_path): os.mkdir(img_path)
 
-def get_fonts(m=1000,rf=[]):
+def get_fonts(m=1000,rf=[],fontdir="C:/Windows/Fonts"):
     if m<0:
         m=1000000000
-    fnts = os.listdir("C:/Windows/Fonts")
-    helper = os.listdir("C:/Windows/Fonts")
+    fnts = os.listdir(fontdir)
+    helper = os.listdir(fontdir)
     i = 0
     for f in helper:
         if f[-3:]!="ttf":
@@ -107,11 +108,11 @@ def make_imgs(fnts, amount=100, fixedletter="", lettermode=0):
         del img
         del d
 
-    f = open("labels.txt",'w')
+    f = open(img_path+"labels.txt",'w')
     f.writelines(labels)
     f.close
 
-    f = open("stats.txt",'w')
+    f = open(img_path+"stats.txt",'w')
     f.writelines(stats)
     f.close
 
@@ -140,10 +141,10 @@ def create_validation_letters(fnts,text="a"):
 # Fonts that dont display normal letters are excluded manually
 rfnts = ["holomdl2.ttf","marlett.ttf","segmdl2.ttf","symbol.ttf","webdings.ttf","wingding.ttf"]
 
-#fnts=["arial.ttf"]
-fnts = get_fonts(m=5000,rf=rfnts)
+fnts=["arial.ttf"]
+#fnts = get_fonts(m=5000,rf=rfnts)
 
 # create_validation_letters(fnts)
 
-if make_imgs(fnts,5000):
+if make_imgs(fnts,500):
     print("Done")
