@@ -11,7 +11,7 @@ from pprint import pprint
 IMG_WIDTH=30
 IMG_HEIGHT=30
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-BATCH_SIZE=50000
+BATCH_SIZE=2000
 
 
 script_path = os.path.dirname(os.path.realpath(__file__))+"\\"
@@ -140,3 +140,4 @@ history = model.fit(image_batch,
                     )
 
 model.save(img_path+"myModel.model")
+
