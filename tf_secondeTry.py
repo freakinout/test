@@ -1,83 +1,118 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers
-import pandas as pd
+from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Activation
+from tensorflow.keras.callbacks import TensorBoard
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from pprint import pprint
+import create_imgs_fromfont_class
+import time
 
 IMG_WIDTH=30
 IMG_HEIGHT=30
 AUTOTUNE = tf.data.experimental.AUTOTUNE
-BATCH_SIZE=50
+BATCH_SIZE = 32
+NUM_EPOCHS = 5
+FOLDER_PROPERTY_SEPERATOR = "_"
+file_ending = ".bmp"
+
+conv_layers = [1,2,3]
+conv_depths = [64,128,256]
+conv_sizes  = [3,4,5]
+pool_sizes  = [2,3]
+dense_layers= [0,1,2]
+dense_sizes = [64,128,256]
 
 
-script_path = os.path.dirname(os.path.realpath(__file__))+"\\"
+script_path = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_path)
-img_path = script_path+"letterimgs\\"
+img_path = script_path+"\\imgs\\"
+model_path = script_path + "\\mymodels\\letter_recognition\\"
+
+dataset_size = 0
+letter_index_list = []
+CATEGORIES = []
+CATEGORIE_LABELS = []
+i= 0
+for folder in os.listdir(img_path):
+  a = folder.split(FOLDER_PROPERTY_SEPERATOR)
+  for i in range(1,len(a)-1):
+    if not a[i][:1] in CATEGORIE_LABELS:
+      CATEGORIE_LABELS.append(a[i][:1])
+  CATEGORIES.append(a)
 
 
-f = open(img_path+"labels.txt")
-labels = f.readlines()
-f.close()
+def get_dirs(cat_vals):
+  dirs = []
+  for i in CATEGORIES:
+    found = True
+    for j in range(len(cat_vals)):
+      found = found and ("{}{}".format(CATEGORIE_LABELS[j],cat_vals[j]) in i or len(cat_vals[j])==0)
+    if found:  dirs.append(FOLDER_PROPERTY_SEPERATOR.join(i) )
+  return dirs
 
-for i in range(len(labels)): labels[i] = (labels[i].split(";")[0])
+def get_label_from_file(directory, as_tensor=False):
+  f = open(img_path+directory+"\\labels.txt")
+  label_file = f.readlines()
+  f.close()
+  labels = np.asarray(label_file)
+  if as_tensor: labels = tf.data.Dataset.from_tensor_slices(labels)
+  return labels
 
-h = []
-for i in range(ord("a"),ord("z")+1): h.append(chr(i))
-h = np.asarray(h)
-
-
-def decode_img(img):
-  # convert the compressed string to a 3D uint8 tensor
+def get_img(path):
+  img = tf.io.read_file(path)
   img = tf.image.decode_bmp(img, channels=0)
-  # Use `convert_image_dtype` to convert to floats in the [0,1] range.
   img = tf.image.convert_image_dtype(img, tf.float32)
-  # resize the image to the desired size.
-  return tf.image.resize(img, [IMG_WIDTH, IMG_HEIGHT])
+  img = tf.image.resize(img, [IMG_WIDTH, IMG_HEIGHT])
+  return img
 
-def get_label(file_path):
-  p = tf.strings.split(file_path,"\\")[-1]
-  p = tf.strings.split(p,".")[0]
-  p = tf.gather(labels,tf.strings.to_number(p,out_type=tf.dtypes.int32))
-  #p = tf.strings.split(p,";")[0]
-  return p#==h
+def process_labels(label_num,file_name,directory):
+  path = tf.strings.join([img_path,directory,"\\",file_name,file_ending])
+  img = get_img(path)
+  return img, label_num
 
-def process_path(file_path):
-  label = get_label(file_path)
-  # load the raw data from the file as a string
-  img = tf.io.read_file(file_path)
-  img = decode_img(img)
-  return img, label
+def preparer_data(directory, first_run=False):
+  global letter_index_list
+  global dataset_size
+  label_file = tf.data.TextLineDataset(img_path+directory+"\\labels.txt")
+  l_lines = []
 
+  for l_line in label_file:
+    q = tf.strings.split(l_line,";")
+    if len(q)>2:
+      h = q[0] # plz find a nicer way
+      for t in range(len(q)-1):
+          if t==0: h=q[t]
+          else: h = tf.strings.join([h,q[t]],separator=";")
+    else: h = q[0]
 
-list_ds = tf.data.Dataset.list_files(tf.strings.join([img_path,'*.bmp']))
+    if not h in letter_index_list: 
+      letter_index_list.append(h)
+    
+    for j in range(len(letter_index_list)):
+      if letter_index_list[j] == h:
+        h = str(j)
+        break
+    q = tf.stack([h,q[-1]])
+    l_lines.append(q)
+  dataset_size += len(l_lines)
+  l_lines = tf.data.Dataset.from_tensor_slices(l_lines)
+  l_lines = l_lines.map(lambda x: (x[0],x[1], directory))
+  dataset = l_lines.map(process_labels)
 
-labeled_ds = list_ds.map(process_path, num_parallel_calls=AUTOTUNE)
+  return dataset
 
-""" for image, label in labeled_ds.take(3):
-  print("Image shape: ", image.numpy().shape)
-  print("Label: ", label.numpy()) """
-
-
-def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000):
-  # This is a small dataset, only load it once, and keep it in memory.
-  # use `.cache(filename)` to cache preprocessing work for datasets that don't
-  # fit in memory.
+def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000, shuffeling = True):
   if cache:
     if isinstance(cache, str):
       ds = ds.cache(cache)
     else:
       ds = ds.cache()
+  if shuffeling: ds = ds.shuffle(buffer_size=shuffle_buffer_size)
 
-  ds = ds.shuffle(buffer_size=shuffle_buffer_size)
-
-  # Repeat forever
   ds = ds.repeat()
-
-  ds = ds.batch(BATCH_SIZE)
+  #ds = ds.batch(1000)
 
   # `prefetch` lets the dataset fetch batches in the background while the model
   # is training.
@@ -85,44 +120,178 @@ def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000):
 
   return ds
 
-train_ds = prepare_for_training(labeled_ds)
+def ds_from_property(property_list):
+  props = []
+  for c in CATEGORIE_LABELS:
+    found_cat = False
+    for p in property_list:
+      if p[0] == c: 
+        props.append(p[1])
+        found_cat = True
+        break
+    if not found_cat: props.append("")
+  dirs = get_dirs(props)
+  ds = preparer_data(dirs[0])
+  for d in dirs[1:]:
+    ds = ds.concatenate(preparer_data(d))
+  return ds
 
-image_batch, label_batch = next(iter(train_ds))
+def make_training(ds):
+  #ds = ds.cache()
+  ds = ds.shuffle(buffer_size=1000)
+  image, label = ds
+  return image, label
 
-#print("####")
-print(label_batch.shape)
+def preparer_unmapped_data(directory, first_run=False):
+  global letter_index_list
+  label_file = tf.data.TextLineDataset(img_path+directory+"\\labels.txt")
+  l_lines = []
+  imgs = []
 
-inputs = keras.Input(shape=(30,30,1), name='digits')
-x = layers.Flatten()(inputs)
-x = layers.Dense(64, activation='relu', name='dense_1')(x)
-x = layers.Dense(64, activation='relu', name='dense_2')(x)
-outputs = layers.Dense(26, activation='softmax', name='predictions')(x)
+  for l_line in label_file:
+    q = tf.strings.split(l_line,";")
+    if len(q)>2:
+      h = q[0] # plz find a nicer way
+      for t in range(len(q)-1):
+          if t==0: h=q[t]
+          else: h = tf.strings.join([h,q[t]],separator=";")
+    else: h = q[0]
 
-model = keras.Model(inputs=inputs, outputs=outputs)
+    if not h in letter_index_list: # filling out Letter Index
+      letter_index_list.append(h)
+    
+    for j in range(len(letter_index_list)):
+      if letter_index_list[j] == h:
+        h = str(j)
+        break
+    #q = tf.stack([h,q[-1]])
+    l_lines.append(q[-1])
+    path = tf.strings.join([img_path,directory,"\\",h,file_ending])
+    imgs.append(get_img(path))
 
-#(x_train, y_train) = labeled_ds
+  l_lines = np.asarray(l_lines)
+  imgs    = np.asarray(imgs)
 
-#x_train = x_train.reshape(500, 900).astype('float32')
+  return imgs, l_lines
 
-#x_val = x_train[-100:]
-#x_train = x_train[:-100]
+def ds_unmapped_from_property(property_list):
+  props = []
+  for c in CATEGORIE_LABELS:
+    found_cat = False
+    for p in property_list:
+      if p[0] == c: 
+        props.append(p[1])
+        found_cat = True
+        break
+    if not found_cat: props.append("")
+  dirs = get_dirs(props)
+  ds = preparer_data(dirs[0])
+  for i in len(ds):
+    for d in dirs[1:]:
+      ds[i] = ds[i].concatenate(preparer_data(d))
+  return ds
 
-model.compile(optimizer=keras.optimizers.RMSprop(),  # Optimizer
+# currently working with 1 folder
+
+ds_propertys = [("p","0"),("d","1.0"),("r","0"),("c","1.0")]
+ds = ds_from_property(ds_propertys)
+"""
+dirs = get_dirs(["0","1.0","0","1.0"])
+ds = preparer_data(dirs[0])
+"""
+for image, label in ds.take(1):
+  print("Image shape: ", image.numpy().shape)
+  #print(image.numpy())
+  print("Label: ", label.numpy()) 
+
+
+ds = ds.repeat()
+ds = ds.shuffle(buffer_size=1000)
+ds_iter = iter(ds)
+
+def generator(ds_iter, bs= BATCH_SIZE):
+  
+  while True:
+    images = np.zeros((bs,IMG_WIDTH,IMG_HEIGHT,1))
+    labels = np.zeros(bs)
+    for j in range(bs):
+      i , l = next(ds_iter)
+      images[j] = np.asarray(i)
+      labels[j] = l
+    yield (images, labels)
+
+
+train_ds = generator(ds_iter, BATCH_SIZE)
+
+model_name = "letter_reading_{}_cnn_128-4x2_{}".format(len(letter_index_list),int(time.time()))
+
+tensorboard = TensorBoard(log_dir='{}/logs/{}'.format(model_path,model_name))
+
+# Keras Model
+model = keras.models.Sequential()
+
+model.add(Conv2D(128,(4,4), input_shape=(30,30,1)))
+model.add(MaxPool2D(pool_size=(3,3)))
+model.add(Activation("relu"))
+
+model.add(Conv2D(128,(4,4)))
+model.add(MaxPool2D(pool_size=(2,2)))
+model.add(Activation("relu"))
+
+model.add(Flatten())
+model.add(Dense(128))
+model.add(Activation("relu"))
+
+model.add(Dense(94, activation='softmax'))
+
+model.compile(optimizer='adam',#keras.optimizers.RMSprop(),  # Optimizer
               # Loss function to minimize
               loss=keras.losses.SparseCategoricalCrossentropy(),
               # List of metrics to monitor
               metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
-# Train the model by slicing the data into "batches"
-# of size "batch_size", and repeatedly iterating over
-# the entire dataset for a given number of "epochs"
-print('# Fit model on training data')
-history = model.fit(image_batch,
-                    label_batch,
-                    #batch_size=50,
-                    epochs=3
-                    # We pass some validation for
-                    # monitoring validation loss and metrics
-                    # at the end of each epoch
-                    #validation_data=(x_val, y_val)
-                    )
+
+#model.fit(images, labels, batch_size=64, epochs=NUM_EPOCHS, shuffle=True, validation_split=0.2, callbacks=[tensorboard])
+
+H = model.fit_generator(
+  train_ds,
+  steps_per_epoch = dataset_size // BATCH_SIZE,
+  epochs = NUM_EPOCHS
+)
+
+model.save(model_path+model_name+".model")
+
+tf.io.write_file(model_path+"index_list.txt", tf.strings.join(letter_index_list,separator="\n"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
+list_ds = ds_from_property([("p","0"),("d","1.0"),("r","0"),("c","1.0")])
+"""
+
+"""for d in dirs[1:]:
+  print(d)
+  ds = ds.concatenate(preparer_data(d))"""
+
+"""for image, label in ds.take(5):
+  print("Image shape: ", image.numpy().shape)
+  #print(image.numpy())
+  print("Label: ", label.numpy()) 
+"""

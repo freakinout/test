@@ -5,7 +5,7 @@ import numpy as np
 import os
 
 class img_creation:
-
+    
     def __init__(self,
                 fontdir = "C:/Windows/Fonts" ,
                 script_path = False , 
@@ -23,9 +23,9 @@ class img_creation:
                 inverse_colors = False, 
                 use_RGB = False # Not implemented
                 ):
-        if (not script_path) or (not os.path.exists(script_path)):
-            script_path = os.path.dirname(os.path.realpath(__file__))
-            os.chdir(script_path)
+        
+        script_path = os.path.dirname(os.path.realpath(__file__))
+        os.chdir(script_path)
         
         if img_rel_path[:1]!="\\" and img_rel_path[:1]!="/": img_rel_path = "\\" + img_rel_path
         if img_rel_path[-1:]!="\\" and img_rel_path[-1:]!="/": img_rel_path = img_rel_path + "\\"
@@ -172,6 +172,7 @@ class img_creation:
        
         if self.use_edge_finder: img = self.edge_finder(img,bcolor)
         
+        self.last_data = np.asarray(img)
         return img 
 
     def make_alphabeth(self, save_to_files=False, label_file_delimiter=";", one_font_mode=False):
@@ -222,13 +223,14 @@ class img_creation:
                     BGColor,
                     random.gauss(0,0.3)*self.rotation_amp
                 )
-                #l = self.resize_to_output(l) # Resize to tf size
+                # Resize to tf size
+                l = self.resize_to_output(l) 
                 if save_to_files: 
                     label_file.append(chr(letter) + label_file_delimiter + str(i)+"\n")
                     l.save(self.img_path+str(i)+".bmp")
 
                 # Numpy Output 
-                l = np.array(l)
+                l = np.asarray(l)
                 alphabeth.append((l,chr(letter)))
                 i+=1
 
@@ -237,9 +239,12 @@ class img_creation:
             f = open(self.img_path+"labels.txt","w")
             f.writelines(label_file)
             f.close()
-        print (["i=",i,len(alphabeth)])
+        #print (["i=",i,len(alphabeth)])
         
-        return np.asarray(alphabeth)
+        alphabeth=np.asarray(alphabeth)
+
+        self.last_data = alphabeth
+        return alphabeth
         
         
         

@@ -1,103 +1,70 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
-import tensorflow as tf
-import pandas as pd
+import create_imgs_fromfont_class
 import numpy as np
-#import IPython.display as display
-#from PIL import Image
-import matplotlib.pyplot as plt
 import os
-#import pathlib
-AUTOTUNE = tf.data.experimental.AUTOTUNE
-BATCH_SIZE = 32
+
+TF_PICTURE_SIZE = [30,30]
+CREATOR_PICTURE_SIZE = [42,60]
+FONTSIZES = [26,24,23,22,21,20,19]
+LETTER_ASCII = range(33,126)
+
+BATCH_CREATION = 10
+POS_VARS = [0,3,5,7,10]
+DISTORTION_AMPS = [1.,2.,4.,1.5]
+ROT_AMPS = [0,10,30,45]
+CONTRASTS = [1.,0.8,0.6,0.2]
+inverse_colors = True
+
+"""BATCH_CREATION = 1
+POS_VARS = [0,3]
+DISTORTION_AMPS = [1.,2.]
+ROT_AMPS = [0,30]
+CONTRASTS = [1.]
+inverse_colors = True
+"""
+img_rel_path = "\\imgs\\"
+
+def make_directory(i_path,pos_var,dist_amp,rot_amp,contrast):
+  new_img_path_rel = "letters_p{}_d{}_r{}_c{}_".format(pos_var,dist_amp,rot_amp,contrast)
+  if os.path.exists(i_path+new_img_path_rel+"0\\"):
+    i = 0
+    for j in os.listdir(i_path):
+      if not os.path.exists(i_path+new_img_path_rel+str(i)+"\\"): 
+        new_img_path_rel = new_img_path_rel+str(i)+"\\"
+        break
+      else:
+        i+=1
+  else:
+    new_img_path_rel = new_img_path_rel+"0\\"
+  os.mkdir(i_path+new_img_path_rel)
+  return(img_rel_path+new_img_path_rel)
 
 
-script_path = os.path.dirname(os.path.realpath(__file__))+"\\"
+script_path = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_path)
-img_path = script_path+"letterimgs\\"
+img_path = script_path+img_rel_path
+if not os.path.exists(img_path): os.mkdir(img_path)
 
-#mnist = tf.keras.datasets.mnist
-#(x_train, y_train), (x_test, y_test) = mnist.load_data()
-
-f = open(img_path+"labels.txt")
-labels = f.readlines()
-f.close()
-
-la = tf.data.TextLineDataset(script_path+"labels.txt")
+image_creator = create_imgs_fromfont_class.img_creation()
 
 
+for batch_counter in range(BATCH_CREATION):
+  for pos_var in POS_VARS:
+    for dist_amp in DISTORTION_AMPS:
+      for rot_amp in ROT_AMPS:
+        for contrast in CONTRASTS:
+          image_creator.__init__(
+                        position_variance=pos_var,
+                        distortion_amp=dist_amp,
+                        use_edge_finder=False, #Looses info for training
+                        rotation_amp=rot_amp,
+                        inverse_colors=True,
+                        contrast=contrast,
+                        letters_ascii=LETTER_ASCII,
+                        fontsizes=FONTSIZES,
+                        picture_size=CREATOR_PICTURE_SIZE,
+                        output_size=TF_PICTURE_SIZE,
+                        img_rel_path= make_directory(img_path,pos_var,dist_amp,rot_amp,contrast)
+                        )
+          image_creator.make_alphabeth(save_to_files=True)
+          
 
-#for i in range(ord("a"),ord("z")+1): CLASS_NAMES.append(i)
-
-for i in range(len(labels)): labels[i] = labels[i].split(";")[0]
-h = []
-for i in range(ord("a"),ord("z")+1): h.append(chr(i))
-h = np.asarray(h)
-
-def process_file(la):
-    #num = int((path.basename(file_path)).split(".")[0])
-    p = tf.strings.split(la,";")
-    label = h==p[0]
-    img = tf.io.read_file(tf.strings.join([img_path,p[1],".bmp"]))
-    img = tf.io.decode_bmp(img,channels=0)
-    img = tf.image.convert_image_dtype(img, tf.float32)
-    img = tf.image.resize(img, [len(img[0]), len(img)])
-    return img, label
-
-def test(la):
-    p = tf.strings.split(la,";")
-    label = h==p[0]
-    return label
-
-
-list_ds = tf.data.Dataset.range(0,len(labels))
-
-labeled_ds = la.map(process_file, num_parallel_calls=AUTOTUNE)
-
-for  image, label in labeled_ds.take(1):
-  print("Image shape: ", image.numpy().shape)
-  print("Label: ", label.numpy())
-
-
-def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000):
-  # This is a small dataset, only load it once, and keep it in memory.
-  # use `.cache(filename)` to cache preprocessing work for datasets that don't
-  # fit in memory.
-  if cache:
-    if isinstance(cache, str):
-      ds = ds.cache(cache)
-    else:
-      ds = ds.cache()
-
-  ds = ds.shuffle(buffer_size=shuffle_buffer_size)
-
-  # Repeat forever
-  ds = ds.repeat()
-
-  ds = ds.batch(BATCH_SIZE)
-
-  # `prefetch` lets the dataset fetch batches in the background while the model
-  # is training.
-  ds = ds.prefetch(buffer_size=AUTOTUNE)
-
-  return ds
-
-
-#train_ds = prepare_for_training(labeled_ds)
-
-image_batch, label_batch = next(iter(labeled_ds))
-image_batch = image_batch.numpy().reshape(len(image_batch),len(image_batch[0])*len(image_batch[0,0]))
-label_batch = label_batch.numpy().astype('float32')
-model = tf.keras.Sequential([
-    #tf.keras.layers.Flatten(input_shape=(30, 30, 1)),
-    tf.keras.layers.Dense(128, activation='relu'),
-    tf.keras.layers.Dense(26, activation='softmax')
-])
-
-model.compile(optimizer='adam',
-            loss='sparse_categorical_crossentropy',
-            metrics=['accuracy'])
-
-model.fit(image_batch, label_batch, batch_size=64, epochs=10)
-
-
-#def not_doing():

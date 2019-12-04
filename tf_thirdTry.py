@@ -90,11 +90,11 @@ def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000):
 
 list_ds = labels.map(process_labels, num_parallel_calls=AUTOTUNE)
 
+print(list_ds.shape)
 """
 for image, label in list_ds.take(3):
   print("Image shape: ", image.numpy().shape)
   print("Label: ", label.numpy()) 
-
 """
 
 train_ds = prepare_for_training(list_ds)
@@ -103,7 +103,7 @@ image_batch, label_batch = next(iter(train_ds))
 
 print("####")
 print(label_batch.shape)
-
+"""
 inputs = keras.Input(shape=(30,30,1), name='digits')
 x = layers.Flatten()(inputs)
 x = layers.Dense(64, activation='relu', name='dense_1')(x)
@@ -141,3 +141,4 @@ history = model.fit(image_batch,
 
 model.save(img_path+"myModel.model")
 
+"""
