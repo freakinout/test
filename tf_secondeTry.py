@@ -4,16 +4,19 @@ from tensorflow import keras
 from tensorflow.keras.layers import Conv2D, MaxPool2D, Flatten, Dense, Activation
 from tensorflow.keras.callbacks import TensorBoard
 import numpy as np
-import matplotlib.pyplot as plt
 import os
 import create_imgs_fromfont_class
 import time
+
+print("Import completed")
+
+small_data_for_testing = False
 
 IMG_WIDTH=30
 IMG_HEIGHT=30
 AUTOTUNE = tf.data.experimental.AUTOTUNE
 BATCH_SIZE = 32
-NUM_EPOCHS = 5
+NUM_EPOCHS = 2 if small_data_for_testing else 10
 FOLDER_PROPERTY_SEPERATOR = "_"
 file_ending = ".bmp"
 
@@ -42,6 +45,7 @@ for folder in os.listdir(img_path):
       CATEGORIE_LABELS.append(a[i][:1])
   CATEGORIES.append(a)
 
+print("Found {} Categories, with {} Labels".format(len(CATEGORIES),len(CATEGORIE_LABELS)))
 
 def get_dirs(cat_vals):
   dirs = []
@@ -113,7 +117,6 @@ def prepare_for_training(ds, cache=True, shuffle_buffer_size=1000, shuffeling = 
 
   ds = ds.repeat()
   #ds = ds.batch(1000)
-
   # `prefetch` lets the dataset fetch batches in the background while the model
   # is training.
   ds = ds.prefetch(buffer_size=AUTOTUNE)
@@ -137,12 +140,30 @@ def ds_from_property(property_list):
   return ds
 
 def make_training(ds):
-  #ds = ds.cache()
+  ds = ds.cache()
+  ds = ds.repeat()
   ds = ds.shuffle(buffer_size=1000)
-  image, label = ds
-  return image, label
+  ds = ds.prefetch(buffer_size=AUTOTUNE)
+  return ds
 
-def preparer_unmapped_data(directory, first_run=False):
+
+def generator(ds_iter, bs= BATCH_SIZE):
+  
+  while True:
+    images = np.zeros((bs,IMG_WIDTH,IMG_HEIGHT,1))
+    labels = np.zeros(bs)
+    for j in range(bs):
+      i , l = next(ds_iter)
+      images[j] = np.asarray(i)
+      labels[j] = l
+    yield (images, labels)
+
+
+def tb_log_writer():
+  print("not yet")
+
+
+def preparer_unmapped_data(directory, first_run=False): # unused
   global letter_index_list
   label_file = tf.data.TextLineDataset(img_path+directory+"\\labels.txt")
   l_lines = []
@@ -174,7 +195,7 @@ def preparer_unmapped_data(directory, first_run=False):
 
   return imgs, l_lines
 
-def ds_unmapped_from_property(property_list):
+def ds_unmapped_from_property(property_list): # unused
   props = []
   for c in CATEGORIE_LABELS:
     found_cat = False
@@ -191,43 +212,28 @@ def ds_unmapped_from_property(property_list):
       ds[i] = ds[i].concatenate(preparer_data(d))
   return ds
 
-# currently working with 1 folder
 
-ds_propertys = [("p","0"),("d","1.0"),("r","0"),("c","1.0")]
-ds = ds_from_property(ds_propertys)
-"""
-dirs = get_dirs(["0","1.0","0","1.0"])
-ds = preparer_data(dirs[0])
-"""
-for image, label in ds.take(1):
-  print("Image shape: ", image.numpy().shape)
-  #print(image.numpy())
-  print("Label: ", label.numpy()) 
+print("Preparing data ")
 
+if small_data_for_testing:
+  # using just one folder
+  dirs = get_dirs(["0","1.0","0","1.0"])
+  ds = preparer_data(dirs[0])
+else:
+  ds_propertys = [("p","0"),("d","1.0"),("r","0"),("c","1.0")]
+  ds = ds_from_property(ds_propertys)
 
-ds = ds.repeat()
-ds = ds.shuffle(buffer_size=1000)
-ds_iter = iter(ds)
-
-def generator(ds_iter, bs= BATCH_SIZE):
-  
-  while True:
-    images = np.zeros((bs,IMG_WIDTH,IMG_HEIGHT,1))
-    labels = np.zeros(bs)
-    for j in range(bs):
-      i , l = next(ds_iter)
-      images[j] = np.asarray(i)
-      labels[j] = l
-    yield (images, labels)
+ds_iter = iter(make_training(ds))
 
 
 train_ds = generator(ds_iter, BATCH_SIZE)
 
 model_name = "letter_reading_{}_cnn_128-4x2_{}".format(len(letter_index_list),int(time.time()))
 
-tensorboard = TensorBoard(log_dir='{}/logs/{}'.format(model_path,model_name))
+tensorboard = TensorBoard(log_dir='{}logs\\{}'.format(model_path,model_name))
 
 # Keras Model
+print("Creating model")
 model = keras.models.Sequential()
 
 model.add(Conv2D(128,(4,4), input_shape=(30,30,1)))
@@ -244,10 +250,8 @@ model.add(Activation("relu"))
 
 model.add(Dense(94, activation='softmax'))
 
-model.compile(optimizer='adam',#keras.optimizers.RMSprop(),  # Optimizer
-              # Loss function to minimize
+model.compile(optimizer='adam',
               loss=keras.losses.SparseCategoricalCrossentropy(),
-              # List of metrics to monitor
               metrics=[keras.metrics.SparseCategoricalAccuracy()])
 
 
@@ -257,10 +261,10 @@ H = model.fit_generator(
   train_ds,
   steps_per_epoch = dataset_size // BATCH_SIZE,
   epochs = NUM_EPOCHS
+  #callbacks=[tensorboard]
 )
 
 model.save(model_path+model_name+".model")
-
 tf.io.write_file(model_path+"index_list.txt", tf.strings.join(letter_index_list,separator="\n"))
 
 
