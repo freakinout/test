@@ -21,7 +21,9 @@ ds = tf.data.Dataset.from_tensor_slices(np.zeros((30,30)))
 
 ds = ds.map(mapping)
 
-ds = tf.data.Dataset.zip(*ds)
+#ds = tf.data.Dataset.zip(*ds)
+
+ds = ds[5:]
 
 """script_path = os.path.dirname(os.path.realpath(__file__))
 os.chdir(script_path)
