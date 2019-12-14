@@ -1,4 +1,4 @@
-# test
+# text-letter-recognition 
 Letter Recognition
 
 Creating letter images 
